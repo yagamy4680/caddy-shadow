@@ -1,0 +1,25 @@
+{
+    debug
+}
+
+http://localhost:8080 {
+    route /greeting {
+        respond Hello
+    }
+
+    route /original {
+        respond Hello
+    }
+
+    route /new {
+        shadow {
+            compare_body
+            primary {
+                respond Hello
+            }
+            shadow {
+                respond Hello2
+            }
+        }
+    }
+}
