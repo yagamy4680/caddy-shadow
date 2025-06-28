@@ -3,22 +3,15 @@
 }
 
 http://localhost:8080 {
-    route /greeting {
-        respond Hello
-    }
-
-    route /original {
-        respond Hello
-    }
-
     route /new {
         shadow {
             compare_body
             primary {
-                respond Hello
+                header +x-test "ohai"
+                respond Primary
             }
             shadow {
-                respond Hello2
+                respond Secondary
             }
         }
     }

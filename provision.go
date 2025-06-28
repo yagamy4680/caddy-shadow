@@ -16,7 +16,6 @@ func (h *Handler) Provision(ctx caddy.Context) (err error) {
 	}
 
 	h.slogger = ctx.Slogger()
-	h.logger = ctx.Logger(h)
 
 	h.json = make([]*gojq.Query, len(h.JSON))
 	for i, qStr := range h.JSON {
@@ -38,9 +37,15 @@ func (h *Handler) Provision(ctx caddy.Context) (err error) {
 
 func (h *Handler) provisionHandlers(ctx caddy.Context) (err error) {
 	var mod any
-	mod, err = ctx.LoadModuleByID(h.ShadowModuleID, h.ShadowJSON)
+	mod, err = ctx.LoadModuleByID("http.handlers.subroute", h.ShadowJSON)
+	if err != nil {
+		return fmt.Errorf("error loading shadow module: %w", err)
+	}
 	h.shadow = mod.(caddyhttp.MiddlewareHandler)
-	mod, err = ctx.LoadModuleByID(h.PrimaryModuleID, h.PrimaryJSON)
+	mod, err = ctx.LoadModuleByID("http.handlers.subroute", h.PrimaryJSON)
+	if err != nil {
+		return fmt.Errorf("error loading primary module: %w", err)
+	}
 	h.primary = mod.(caddyhttp.MiddlewareHandler)
 
 	if provisioner, ok := h.shadow.(caddy.Provisioner); ok {

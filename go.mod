@@ -5,7 +5,6 @@ go 1.24.3
 require (
 	github.com/caddyserver/caddy/v2 v2.10.0
 	github.com/itchyny/gojq v0.12.17
-	go.uber.org/zap v1.27.0
 )
 
 require (
@@ -101,6 +100,7 @@ require (
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/mock v0.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20250305170421-49bf5b80c810 // indirect

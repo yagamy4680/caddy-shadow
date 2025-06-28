@@ -5,95 +5,69 @@ import (
 	"fmt"
 
 	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
+	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
 
-func (h *Handler) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	d.Next()
-	for d.NextBlock(0) {
-		switch d.Val() {
-		case "primary", "shadow":
-			handlerName := d.Val()
-			if !d.NextBlock(d.Nesting()) {
-				return fmt.Errorf("unable to read %s directive", handlerName)
-			}
+func init() {
+	caddy.RegisterModule(Handler{})
+	httpcaddyfile.RegisterHandlerDirective("shadow", ParseCaddyfile)
+}
 
-			directive := d.Val()
-			d2 := d.NewFromNextSegment()
-			d2.Prev()
-			hnd, err := unmarshalWrapped(directive, d2)
+func ParseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+	hnd := new(Handler)
+	h.Next()
+	for h.NextBlock(0) {
+		handlerName := h.Val()
+		switch handlerName {
+		case "primary", "shadow":
+			innerHnd, err := httpcaddyfile.ParseSegmentAsSubroute(h.WithDispenser(h.NewFromNextSegment()))
 			if err != nil {
-				return fmt.Errorf("error unmarshaling %s: %w", directive, err)
+				return nil, fmt.Errorf("error unmarshaling %s: %w", handlerName, err)
 			}
 
 			if handlerName == "primary" {
-				h.PrimaryJSON, err = json.Marshal(hnd)
+				hnd.PrimaryJSON, err = json.Marshal(innerHnd)
 				if err != nil {
-					return fmt.Errorf("error marshaling %s: %w", directive, err)
+					return nil, fmt.Errorf("error marshaling %s: %w", handlerName, err)
 				}
-				h.PrimaryModuleID = string(hnd.(caddy.Module).CaddyModule().ID)
 			} else {
-				h.ShadowJSON, err = json.Marshal(hnd)
+				hnd.ShadowJSON, err = json.Marshal(innerHnd)
 				if err != nil {
-					return fmt.Errorf("error marshaling %s: %w", directive, err)
+					return nil, fmt.Errorf("error marshaling %s: %w", handlerName, err)
 				}
-				h.ShadowModuleID = string(hnd.(caddy.Module).CaddyModule().ID)
 			}
 		case "compare_body":
-			h.ComparisonConfig.Body = true
+			hnd.ComparisonConfig.Body = true
 		case "compare_status":
-			h.ComparisonConfig.Status = true
+			hnd.ComparisonConfig.Status = true
 		case "compare_headers":
-			h.ComparisonConfig.Headers = d.RemainingArgs()
+			hnd.ComparisonConfig.Headers = h.RemainingArgs()
 		case "compare_json":
-			for d.NextArg() {
-				qStr := d.Val()
-				h.ComparisonConfig.JSON = append(h.ComparisonConfig.JSON, JQQuery(qStr))
+			for h.NextArg() {
+				qStr := h.Val()
+				hnd.ComparisonConfig.JSON = append(hnd.ComparisonConfig.JSON, JQQuery(qStr))
 			}
 		case "ignore_json":
-			for d.NextArg() {
-				qStr := d.Val()
-				h.ComparisonConfig.IgnoreJSON = append(h.ComparisonConfig.IgnoreJSON, JQQuery(qStr))
+			for h.NextArg() {
+				qStr := h.Val()
+				hnd.ComparisonConfig.IgnoreJSON = append(hnd.ComparisonConfig.IgnoreJSON, JQQuery(qStr))
 			}
 		case "redact_json":
-			for d.NextArg() {
-				qStr := d.Val()
-				h.ReportingConfig.RedactJSON = append(h.ReportingConfig.RedactJSON, JQQuery(qStr))
+			for h.NextArg() {
+				qStr := h.Val()
+				hnd.ReportingConfig.RedactJSON = append(hnd.ReportingConfig.RedactJSON, JQQuery(qStr))
 			}
 		case "no_log":
-			h.ReportingConfig.NoLog = true
+			hnd.ReportingConfig.NoLog = true
 		case "log_level":
-			if len(d.RemainingArgs()) < 1 {
-				return fmt.Errorf("log_level requires a log level")
+			if len(h.RemainingArgs()) < 1 {
+				return nil, fmt.Errorf("log_level requires a log level")
 			}
-			d.NextArg()
-			ll := LogLevel(d.Val())
-			h.ReportingConfig.LogLevel = &ll
+			h.NextArg()
+			ll := LogLevel(h.Val())
+			hnd.ReportingConfig.LogLevel = &ll
 		}
 	}
-	return nil
-}
-
-func unmarshalWrapped(directive string, d *caddyfile.Dispenser) (hnd caddyhttp.MiddlewareHandler, err error) {
-	switch directive {
-	case "respond":
-		hnd = new(caddyhttp.StaticResponse)
-	default:
-		var modInfo caddy.ModuleInfo
-		modInfo, err = caddy.GetModule("http.handlers." + directive)
-		if err != nil {
-			return nil, fmt.Errorf("error loading module %s: %w", directive, err)
-		}
-		var ok bool
-		if hnd, ok = modInfo.New().(caddyhttp.MiddlewareHandler); !ok {
-			return nil, fmt.Errorf("module %s is not a caddyhttp.MiddlewareHandler", directive)
-		}
-	}
-
-	if unmarshaler, ok := hnd.(caddyfile.Unmarshaler); ok {
-		err = unmarshaler.UnmarshalCaddyfile(d)
-	}
-
-	return hnd, err
+	return hnd, nil
 }

@@ -3,8 +3,9 @@ package shadow
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"go.uber.org/zap"
+	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -12,8 +13,6 @@ import (
 	"sync"
 
 	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
-	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
 
@@ -25,33 +24,18 @@ var (
 	}
 )
 
-func init() {
-	caddy.RegisterModule(Handler{})
-	httpcaddyfile.RegisterHandlerDirective("shadow", ParseCaddyfile)
-}
-
-func ParseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
-	hnd := new(Handler)
-	err := hnd.UnmarshalCaddyfile(h.Dispenser)
-	return hnd, err
-}
-
 // Handler runs multiple handlers and aggregates their results
 type Handler struct {
 	shadow  caddyhttp.MiddlewareHandler
 	primary caddyhttp.MiddlewareHandler
 
 	slogger *slog.Logger
-	logger  *zap.Logger
 
 	ComparisonConfig
 	ReportingConfig
 
-	PrimaryModuleID string
-	ShadowModuleID  string
-
-	PrimaryJSON []byte
-	ShadowJSON  []byte
+	PrimaryJSON json.RawMessage
+	ShadowJSON  json.RawMessage
 }
 
 // CaddyModule returns the Caddy module information.
@@ -96,27 +80,37 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyht
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
-	var primaryErr, shadowErr error
+	primaryR := r.Clone(primaryCtx)
+	shadowR := r.Clone(shadowCtx)
+
+	if r.Body != nil {
+		// Multiplex the request body if it's present
+		reqBuf := bufferPool.Get().(*bytes.Buffer)
+		reqBuf.Reset()
+		defer bufferPool.Put(reqBuf)
+
+		tee := io.TeeReader(r.Body, reqBuf)
+		primaryR.Body = io.NopCloser(tee)
+		shadowR.Body = io.NopCloser(reqBuf)
+	}
 
 	go func() {
-		primaryErr = h.primary.ServeHTTP(primaryRec, r.WithContext(primaryCtx), next)
+		err2 := h.primary.ServeHTTP(primaryRec, primaryR, next)
+		if err2 != nil {
+			h.slogger.Error("primaryHandlerError", slog.String("error", err.Error()))
+			err = errors.Join(err, err2)
+		}
 		wg.Done()
 	}()
 	go func() {
-		shadowErr = h.shadow.ServeHTTP(shadowRec, r.WithContext(shadowCtx), next)
+		err2 := h.shadow.ServeHTTP(shadowRec, shadowR, next)
+		if err2 != nil {
+			h.slogger.Error("shadowHandlerError", slog.String("error", err.Error()))
+			err = errors.Join(err, err2)
+		}
 		wg.Done()
 	}()
-
 	wg.Wait()
-
-	if primaryErr != nil {
-		h.slogger.Error("primaryHandlerError", slog.String("error", primaryErr.Error()))
-		err = errors.Join(err, primaryErr)
-	}
-	if shadowErr != nil {
-		h.slogger.Error("shadowHandlerError", slog.String("error", shadowErr.Error()))
-		err = errors.Join(err, primaryErr)
-	}
 
 	if !primaryRec.Buffered() {
 		return err
@@ -169,6 +163,5 @@ func (w *responseWriter) WriteHeader(statusCode int) {
 
 var (
 	_ caddy.Provisioner           = (*Handler)(nil)
-	_ caddyfile.Unmarshaler       = (*Handler)(nil)
 	_ caddyhttp.MiddlewareHandler = (*Handler)(nil)
 )
