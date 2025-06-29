@@ -2,10 +2,14 @@ package shadow
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+
 	"github.com/itchyny/gojq"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Provision implements caddy.Provisioner
@@ -17,19 +21,45 @@ func (h *Handler) Provision(ctx caddy.Context) (err error) {
 
 	h.slogger = ctx.Slogger()
 
-	h.json = make([]*gojq.Query, len(h.JSON))
-	for i, qStr := range h.JSON {
-		h.json[i], _ = gojq.Parse(string(qStr))
+	h.now = time.Now
+
+	if len(h.CompareJQ) > 0 {
+		h.compareJQ = make([]*gojq.Query, len(h.CompareJQ))
+		for i, qStr := range h.CompareJQ {
+			h.compareJQ[i], err = gojq.Parse(string(qStr))
+			if err != nil {
+				return fmt.Errorf("error parsing jq query %d: %w", i, err)
+			}
+		}
 	}
 
-	h.ignoreJSON = make([]*gojq.Query, len(h.IgnoreJSON))
-	for i, qStr := range h.IgnoreJSON {
-		h.ignoreJSON[i], _ = gojq.Parse(string(qStr))
+	h.timeout = 30 * time.Second
+	if h.Timeout != "" {
+		h.timeout, err = time.ParseDuration(h.Timeout)
+		if err != nil {
+			return fmt.Errorf("error parsing timeout: %w", err)
+		}
 	}
 
-	h.redactJSON = make([]*gojq.Query, len(h.RedactJSON))
-	for i, qStr := range h.RedactJSON {
-		h.redactJSON[i], _ = gojq.Parse(string(qStr))
+	if h.MetricsName != "" {
+		// If metrics are enabled, assume that always includes basic performance metrics
+		h.metrics.provision(ctx, h.MetricsName)
+	}
+
+	// Add metrics for comparisons if enabled
+	if h.CompareBody || h.CompareJQ != nil {
+		h.metrics.match = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: h.MetricsName,
+			Name:      "shadow_body_match",
+			Help:      "Number of responses that matched",
+		})
+		h.metrics.mismatch = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: h.MetricsName,
+			Name:      "shadow_body_mismatch",
+			Help:      "Number of responses that did not match",
+		})
+		_ = ctx.GetMetricsRegistry().Register(h.metrics.match)
+		_ = ctx.GetMetricsRegistry().Register(h.metrics.mismatch)
 	}
 
 	return nil

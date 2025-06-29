@@ -3,7 +3,7 @@ package shadow
 import (
 	"encoding/json"
 	"fmt"
-
+	
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -38,36 +38,48 @@ func ParseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 				}
 			}
 		case "compare_body":
-			hnd.ComparisonConfig.Body = true
+			hnd.ComparisonConfig.CompareBody = true
 		case "compare_status":
 			hnd.ComparisonConfig.Status = true
 		case "compare_headers":
 			hnd.ComparisonConfig.Headers = h.RemainingArgs()
-		case "compare_json":
-			for h.NextArg() {
-				qStr := h.Val()
-				hnd.ComparisonConfig.JSON = append(hnd.ComparisonConfig.JSON, JQQuery(qStr))
+		case "compare_jq":
+			args := h.RemainingArgs()
+			if len(args) < 1 {
+				return nil, fmt.Errorf("compare_jq requires at least one jq query")
 			}
-		case "ignore_json":
-			for h.NextArg() {
-				qStr := h.Val()
-				hnd.ComparisonConfig.IgnoreJSON = append(hnd.ComparisonConfig.IgnoreJSON, JQQuery(qStr))
-			}
-		case "redact_json":
-			for h.NextArg() {
-				qStr := h.Val()
-				hnd.ReportingConfig.RedactJSON = append(hnd.ReportingConfig.RedactJSON, JQQuery(qStr))
+			for _, qStr := range args {
+				hnd.ComparisonConfig.CompareJQ = append(hnd.ComparisonConfig.CompareJQ, JQQuery(qStr))
 			}
 		case "no_log":
 			hnd.ReportingConfig.NoLog = true
 		case "log_level":
-			if len(h.RemainingArgs()) < 1 {
+			args := h.RemainingArgs()
+			if len(args) < 1 {
 				return nil, fmt.Errorf("log_level requires a log level")
 			}
-			h.NextArg()
-			ll := LogLevel(h.Val())
+			ll := LogLevel(args[0])
 			hnd.ReportingConfig.LogLevel = &ll
+		case "metrics":
+			args := h.RemainingArgs()
+			if len(args) < 1 {
+				return nil, fmt.Errorf("metrics requires a prefix/namespace")
+			}
+			hnd.MetricsName = args[0]
+		case "timeout":
+			args := h.RemainingArgs()
+			if len(args) < 1 {
+				return nil, fmt.Errorf("timeout requires duration")
+			}
+			hnd.Timeout = args[0]
 		}
+	}
+
+	if hnd.PrimaryJSON == nil {
+		return nil, fmt.Errorf("primary handler is required")
+	}
+	if hnd.ShadowJSON == nil {
+		return nil, fmt.Errorf("shadow handler is required")
 	}
 	return hnd, nil
 }

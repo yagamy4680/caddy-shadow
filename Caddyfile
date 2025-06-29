@@ -1,17 +1,18 @@
 {
     debug
+    metrics
 }
 
 http://localhost:8080 {
     route /new {
         shadow {
-            compare_body
+            metrics path_new
+            compare_jq .id
             primary {
-                header +x-test "ohai"
-                respond Primary
+                respond "{\"id\":\"foo\", \"done\":\"ok\"}"
             }
             shadow {
-                respond Secondary
+                respond "{\"id\":\"bar\", \"done\":\"ok\"}"
             }
         }
     }
