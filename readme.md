@@ -1,5 +1,10 @@
 # caddy-shadow
 
+> [!WARNING]
+> This project's configuration and behavior should be considered unstable until it reaches its first `v1.0.0` release.
+> If you choose to incorporate this into your xcaddy build, please use a tagged release and read release notes if you
+> upgrade to a newer version.
+
 caddy-shadow is
 a [Shadow Testing](https://microsoft.github.io/code-with-engineering-playbook/automated-testing/shadow-testing/) module
 for Caddy 2, with full Caddyfile support.
@@ -18,6 +23,15 @@ for Caddy 2, with full Caddyfile support.
     - Configurable response header comparison
     - Response status comparison
 - Reporting features **(⚠️ Planned)**
+
+## Building with `xcaddy`
+
+As with all Caddy plugin modules, you can use the [`xcaddy`](https://github.com/caddyserver/xcaddy) tool to compile 
+Caddy with this plugin included.
+
+```sh
+> caddy build --with github.com/dotvezz/caddy-shadow
+```
 
 ## Caddyfile
 
