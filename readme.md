@@ -2,8 +2,8 @@
 
 > [!WARNING]
 > This project's configuration and behavior should be considered unstable until it reaches its first `v1.0.0` release.
-> If you choose to incorporate this into your xcaddy build, please use a tagged release and read release notes if you
-> upgrade to a newer version.
+> Any change before `v1.0.0` may be a breaking change. If you choose to incorporate this into your xcaddy build,
+> please use a tagged release and read release notes if you upgrade to a newer version.
 
 caddy-shadow is
 a [Shadow Testing](https://microsoft.github.io/code-with-engineering-playbook/automated-testing/shadow-testing/) module
