@@ -30,7 +30,7 @@ As with all Caddy plugin modules, you can use the [`xcaddy`](https://github.com/
 Caddy with this plugin included.
 
 ```sh
-> caddy build --with github.com/dotvezz/caddy-shadow
+> xcaddy build --with github.com/dotvezz/caddy-shadow
 ```
 
 ## Caddyfile
